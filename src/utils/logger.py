@@ -1,70 +1,42 @@
-from loguru import logger
-import sys  # <-- ОБЯЗАТЕЛЬНО ДОБАВИТЬ ЭТУ СТРОКУ
+import sys
 import json
 from pathlib import Path
-
 from loguru import logger
-import os
-from pathlib import Path
 
-# Создаём директорию для логов
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 
 def setup_logging(debug_mode: bool = False):
-    """
-    Настройка логирования в JSON‑формате с ротацией по дням.
-
-    Args:
-        debug_mode (bool): если True — режим разработки (DEBUG), иначе — продакшен (INFO)
-    """
-    # Удаляем все существующие обработчики
     logger.remove()
+    level = "DEBUG" if debug_mode else "INFO"
 
-    # Определяем уровень логирования
-    log_level = "DEBUG" if debug_mode else "INFO"
-
-    # Обработчик для JSON‑логов с ротацией
+    # 1. Файловый лог (JSON) - используем serialize=True для надежности
+    # Это встроенная функция loguru, она надежнее ручной
     logger.add(
-        sink=LOG_DIR / "bot.json",
-        format=lambda record: json.dumps(
-            {
-                "timestamp": record["time"].strftime("%Y-%m-%d %H:%M:%S"),
-                "level": record["level"].name,
-                "message": record["message"],
-                "file": record["file"],
-                "line": record["line"],
-                "function": record["function"],
-                **record["extra"],
-            }
-        ),
+        LOG_DIR / "bot.json",
+        level=level,
         rotation="00:00",
-        retention="30 days",
+        retention="7 days",
         compression="zip",
-        serialize=False,
-        level=log_level,
+        serialize=True,  # <--- ВОЛШЕБСТВО: Loguru сама делает валидный JSON!
         enqueue=True,
     )
 
-    # Дополнительный обработчик для консоли (только в режиме разработки)
+    # 2. Консоль
     if debug_mode:
         logger.add(
-            sink=sys.stderr,
-            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{line}</cyan> - <level>{message}</level>",
+            sys.stderr,
+            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{line}</cyan> | <level>{message}</level>",
             level="DEBUG",
             enqueue=True,
         )
-        logger.debug("Режим разработки активирован")
     else:
-        # В продакшене только базовые сообщения в консоль
         logger.add(
-            sink=sys.stderr,
-            format="{time:HH:mm:ss} | {level} | {message}",
+            sys.stderr,
+            format="{time:HH:mm:ss} | {level: <8} | {message}",
             level="INFO",
             enqueue=True,
         )
 
-    logger.info(
-        f"Логирование настроено в режиме: {'РАЗРАБОТКА' if debug_mode else 'ПРОДАКШЕН'}"
-    )
+    logger.info("Логирование настроено")
